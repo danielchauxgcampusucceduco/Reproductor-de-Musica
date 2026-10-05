@@ -47,6 +47,14 @@ describe('función privada de búsqueda de YouTube', () => {
     expect(response.status).toBe(503);
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it('acepta la petición same-origin de Vercel cuando el navegador omite Origin', async () => {
+    vi.stubEnv('YOUTUBE_API_KEY', '');
+    const response = await invoke(`https://reproductor-de-musica-sable.vercel.app/api/youtube/search?q=same-origin-${Date.now()}`, '');
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://reproductor-de-musica-sable.vercel.app');
+  });
 });
 
 async function invoke(url: string, origin: string, method = 'GET'): Promise<Response> {

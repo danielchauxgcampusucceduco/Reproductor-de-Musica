@@ -39,7 +39,8 @@ const cacheDurationMs = 10 * 60 * 1000;
 
 /** Endpoint Node.js de Vercel: mantiene la clave fuera del navegador y limita la respuesta a metadatos públicos. */
 export default async function handler(request: VercelRequest, response: VercelResponse): Promise<void> {
-  const origin = headerValue(request.headers.origin);
+  const requestHost = headerValue(request.headers.host);
+  const origin = headerValue(request.headers.origin) || (isAllowedHost(requestHost) ? `https://${requestHost}` : '');
   if (!isAllowedOrigin(origin)) {
     sendJson(response, 403, { error: { message: 'Origen no autorizado.' } });
     return;
@@ -60,7 +61,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     return;
   }
 
-  const host = headerValue(request.headers.host) || 'reproductor-de-musica-sable.vercel.app';
+  const host = requestHost || 'reproductor-de-musica-sable.vercel.app';
   const query = new URL(request.url ?? '/', `https://${host}`).searchParams.get('q')?.trim() ?? '';
   if (!query || query.length > 120) {
     sendJson(response, 400, { error: { message: 'Escribe una búsqueda de hasta 120 caracteres.' } }, corsHeaders);
@@ -153,6 +154,12 @@ function isAllowedOrigin(origin: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isAllowedHost(host: string): boolean {
+  return host === 'reproductor-de-musica-sable.vercel.app'
+    || host.endsWith('.reproductor-de-musica-sable.vercel.app')
+    || host.endsWith('--reproductor-de-musica-sable.vercel.app');
 }
 
 function isYouTubeThumbnail(value: string): boolean {
