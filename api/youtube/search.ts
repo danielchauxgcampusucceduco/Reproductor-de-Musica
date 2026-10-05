@@ -39,8 +39,9 @@ const cacheDurationMs = 10 * 60 * 1000;
 
 /** Endpoint Node.js de Vercel: mantiene la clave fuera del navegador y limita la respuesta a metadatos públicos. */
 export default async function handler(request: VercelRequest, response: VercelResponse): Promise<void> {
+  const originHeader = headerValue(request.headers.origin);
   const requestHost = headerValue(request.headers.host);
-  const origin = headerValue(request.headers.origin) || (isAllowedHost(requestHost) ? `https://${requestHost}` : '');
+  const origin = originHeader || `https://${requestHost || 'reproductor-de-musica-sable.vercel.app'}`;
   if (!isAllowedOrigin(origin)) {
     sendJson(response, 403, { error: { message: 'Origen no autorizado.' } });
     return;
@@ -154,12 +155,6 @@ function isAllowedOrigin(origin: string): boolean {
   } catch {
     return false;
   }
-}
-
-function isAllowedHost(host: string): boolean {
-  return host === 'reproductor-de-musica-sable.vercel.app'
-    || host.endsWith('.reproductor-de-musica-sable.vercel.app')
-    || host.endsWith('--reproductor-de-musica-sable.vercel.app');
 }
 
 function isYouTubeThumbnail(value: string): boolean {
