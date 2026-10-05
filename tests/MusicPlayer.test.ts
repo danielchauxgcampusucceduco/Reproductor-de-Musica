@@ -287,4 +287,25 @@ describe('MusicPlayer', () => {
     expect(audioEngine.seek).toHaveBeenCalledWith(5, songs[0]);
     expect(audioEngine.pause).toHaveBeenCalled();
   });
+
+  it('sincroniza el estado y el progreso cuando los controles nativos cambian la reproducción', () => {
+    let reportPlaybackState = (_isPlaying: boolean): void => {};
+    let audioTime = 0;
+    const audioEngine: AudioEngine = {
+      play: vi.fn(),
+      pause: vi.fn(),
+      seek: vi.fn(),
+      setVolume: vi.fn(),
+      getCurrentTime: () => audioTime,
+      setPlaybackStateHandler: (handler) => { reportPlaybackState = handler; }
+    };
+    const player = new MusicPlayer(songs, null, audioEngine);
+
+    reportPlaybackState(true);
+    expect(currentState(player).isPlaying).toBe(true);
+    audioTime = 6.7;
+    reportPlaybackState(false);
+    expect(currentState(player)).toMatchObject({ isPlaying: false, elapsedSec: 6 });
+    player.destroy();
+  });
 });

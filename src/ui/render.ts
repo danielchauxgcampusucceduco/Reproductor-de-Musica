@@ -1,8 +1,8 @@
 import type { MusicPlayer, PlayerState } from '../domain/MusicPlayer';
 import type { Song } from '../domain/Song';
 import type { BrowserAudioEngine } from '../domain/AudioEngine';
-import type { SpotifyClient, SpotifyClientState } from '../domain/SpotifyClient';
-import type { SpotifyPlaybackEngine } from '../domain/SpotifyPlaybackEngine';
+import type { YouTubeClient } from '../domain/YouTubeClient';
+import type { YouTubePlaybackEngine } from '../domain/YouTubePlaybackEngine';
 import { createButton, createElement, createIcon, createIconButton, formatTime, type IconName } from './components/dom';
 import { createArtwork } from './components/Artwork';
 import { createSongRow } from './components/SongRow';
@@ -17,8 +17,8 @@ export function mountPlayer(
   root: HTMLElement,
   player: MusicPlayer,
   audioEngine: BrowserAudioEngine,
-  spotifyClient: SpotifyClient,
-  spotifyPlayback: SpotifyPlaybackEngine,
+  youtubeClient: YouTubeClient,
+  youtubePlayback: YouTubePlaybackEngine,
   onChange: (state: PlayerState) => void
 ): void {
   const app = createElement('main', 'app');
@@ -41,8 +41,15 @@ export function mountPlayer(
   const playerCard = createElement('section', 'card player');
   playerCard.setAttribute('aria-label', 'Controles del reproductor');
   const cover = createElement('div', 'cover');
-  cover.setAttribute('aria-hidden', 'true');
-  cover.append(createArtwork('Música', 'Colección local'));
+  const coverArtwork = createElement('div', 'cover-artwork');
+  coverArtwork.setAttribute('aria-hidden', 'true');
+  coverArtwork.append(createArtwork('Música', 'Colección local'));
+  const youtubeStage = createElement('div', 'youtube-stage');
+  youtubeStage.hidden = true;
+  const youtubePlayerHost = createElement('div', 'youtube-player-host');
+  youtubePlayerHost.setAttribute('aria-label', 'Reproductor oficial de YouTube');
+  youtubeStage.append(youtubePlayerHost);
+  cover.append(coverArtwork, youtubeStage);
   const eyebrow = createElement('span', 'eyebrow');
   eyebrow.textContent = 'REPRODUCIENDO AHORA';
   const currentTitle = createElement('h2', 'now-title');
@@ -111,36 +118,26 @@ export function mountPlayer(
   folderTools.append(folderButton, folderHint, folderPrivacyHint, folderPicker, folderStatus);
   librarySection.append(libraryHeading, folderTools);
 
-  const spotifyTools = createElement('section', 'spotify-tools');
-  spotifyTools.setAttribute('aria-label', 'Buscar música con Spotify');
-  const spotifyHeading = createElement('h3', 'spotify-heading');
-  spotifyHeading.textContent = 'Escucha con Spotify';
-  const spotifyDescription = createElement('p', 'spotify-description');
-  spotifyDescription.textContent = 'Inicia sesión en Spotify para buscar música y agregarla a tu lista. Para reproducirla necesitas Premium.';
-  const spotifyConnectionForm = createElement('form', 'spotify-connect-form');
-  spotifyConnectionForm.noValidate = true;
-  const spotifyConnectButton = createButton('Iniciar sesión en Spotify', 'Iniciar sesión en Spotify', 'primary');
-  spotifyConnectButton.type = 'submit';
-  const spotifyDisconnectButton = createButton('Desconectar Spotify', 'Desconectar', 'filter-button');
-  spotifyDisconnectButton.hidden = true;
-  spotifyConnectionForm.append(spotifyConnectButton, spotifyDisconnectButton);
-  const spotifyStatus = createElement('p', 'spotify-status');
-  spotifyStatus.setAttribute('aria-live', 'polite');
-  const spotifyPlaybackStatus = createElement('p', 'spotify-playback-status');
-  spotifyPlaybackStatus.setAttribute('aria-live', 'polite');
-  const spotifySearchForm = createElement('form', 'spotify-search-form');
-  const spotifySearch = createElement('input', 'search-input');
-  spotifySearch.type = 'search';
-  spotifySearch.placeholder = 'Busca en el catálogo de Spotify';
-  spotifySearch.setAttribute('aria-label', 'Buscar canciones en Spotify');
-  spotifySearch.disabled = true;
-  const spotifySearchButton = createButton('Buscar en Spotify', 'Buscar', 'filter-button');
-  spotifySearchButton.type = 'submit';
-  spotifySearchButton.disabled = true;
-  spotifySearchForm.append(spotifySearch, spotifySearchButton);
-  const spotifyResults = createElement('div', 'spotify-results');
-  spotifyResults.setAttribute('aria-live', 'polite');
-  spotifyTools.append(spotifyHeading, spotifyDescription, spotifyConnectionForm, spotifyStatus, spotifyPlaybackStatus, spotifySearchForm, spotifyResults);
+  const youtubeTools = createElement('section', 'youtube-tools');
+  youtubeTools.setAttribute('aria-label', 'Buscar música en YouTube');
+  const youtubeHeading = createElement('h3', 'youtube-heading');
+  youtubeHeading.textContent = 'Descubre en YouTube';
+  const youtubeDescription = createElement('p', 'youtube-description');
+  youtubeDescription.textContent = 'Busca videos musicales y reprodúcelos aquí con el reproductor oficial de YouTube.';
+  const youtubeSearchForm = createElement('form', 'youtube-search-form');
+  const youtubeSearch = createElement('input', 'search-input');
+  youtubeSearch.type = 'search';
+  youtubeSearch.placeholder = 'Busca una canción o un artista';
+  youtubeSearch.maxLength = 120;
+  youtubeSearch.setAttribute('aria-label', 'Buscar canciones y videos en YouTube');
+  const youtubeSearchButton = createButton('Buscar música en YouTube', 'Buscar', 'filter-button');
+  youtubeSearchButton.type = 'submit';
+  youtubeSearchForm.append(youtubeSearch, youtubeSearchButton);
+  const youtubeStatus = createElement('p', 'youtube-status');
+  youtubeStatus.setAttribute('aria-live', 'polite');
+  const youtubeResults = createElement('div', 'youtube-results');
+  youtubeResults.setAttribute('aria-live', 'polite');
+  youtubeTools.append(youtubeHeading, youtubeDescription, youtubeSearchForm, youtubeStatus, youtubeResults);
 
   const manualSection = createElement('section', 'content-section manual-section');
   const manualHeading = createElement('h3', 'subsection-title');
@@ -188,7 +185,7 @@ export function mountPlayer(
   shortcuts.textContent = 'Atajos: Espacio reproducir/pausar · ← anterior · → siguiente · Supr eliminar canción activa';
   const playlistSection = createElement('section', 'content-section playlist-section');
   playlistSection.append(listHeading, search, filterRow, playlist, shortcuts);
-  playlistCard.append(librarySection, spotifyTools, manualSection, playlistSection);
+  playlistCard.append(librarySection, youtubeTools, manualSection, playlistSection);
 
   const visualizerCard = createElement('section', 'card visualizer');
   const visualizerHeading = createElement('h2', 'section-title');
@@ -201,9 +198,9 @@ export function mountPlayer(
   layout.append(playerCard, playlistCard, visualizerCard);
   app.append(layout);
   root.replaceChildren(app);
+  youtubePlayback.attach(youtubePlayerHost);
 
   let latestState: PlayerState | null = null;
-  let spotifyState: SpotifyClientState | null = null;
   let favoritesFilter = false;
   let draggedId: string | null = null;
   let renderedPlaylistKey = '';
@@ -233,31 +230,7 @@ export function mountPlayer(
   });
   folderButton.addEventListener('click', () => folderPicker.click());
   folderPicker.addEventListener('change', () => { void loadSelectedFolder(); });
-  spotifyConnectionForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    void spotifyClient.authorize().catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : 'No se pudo abrir Spotify.';
-      spotifyStatus.textContent = message;
-      showToast(message);
-    });
-  });
-  spotifyDisconnectButton.addEventListener('click', () => spotifyClient.disconnect());
-  spotifySearchForm.addEventListener('submit', (event) => { void searchSpotify(event); });
-  spotifyClient.subscribe((state) => {
-    spotifyState = state;
-    spotifyStatus.textContent = state.message;
-    spotifyConnectButton.hidden = state.authenticated;
-    spotifyConnectButton.disabled = !state.configured || state.authenticated;
-    spotifyDisconnectButton.hidden = !state.authenticated;
-    spotifySearch.disabled = !state.authenticated;
-    spotifySearchButton.disabled = !state.authenticated;
-    if (state.authenticated) {
-      void spotifyPlayback.connect().catch((error: unknown) => {
-        spotifyPlaybackStatus.textContent = error instanceof Error ? error.message : 'No se pudo conectar Spotify.';
-      });
-    }
-  });
-  spotifyPlayback.subscribe((state) => { spotifyPlaybackStatus.textContent = state.message; });
+  youtubeSearchForm.addEventListener('submit', (event) => { void searchYouTube(event); });
   position.addEventListener('change', () => {
     customPositionField.wrapper.hidden = position.value !== 'custom';
     updatePreview();
@@ -322,11 +295,13 @@ export function mountPlayer(
     const current = state.current;
     currentTitle.textContent = current?.title ?? 'Sin canción seleccionada';
     currentArtist.textContent = current?.artist ?? 'Agrega una canción para comenzar';
-    const coverKey = current ? `${current.id}:${current.title}:${current.artist}` : 'empty';
+    const coverKey = current ? `${current.id}:${current.title}:${current.artist}:${current.thumbnailUrl ?? ''}:${current.youtubeVideoId ?? ''}` : 'empty';
     if (coverKey !== renderedCoverKey) {
-      cover.replaceChildren(createArtwork(current?.title ?? 'Música', current?.artist ?? 'Colección local'));
+      coverArtwork.replaceChildren(createArtwork(current?.title ?? 'Música', current?.artist ?? 'Colección local', current?.thumbnailUrl));
       renderedCoverKey = coverKey;
     }
+    youtubeStage.hidden = !current?.youtubeVideoId;
+    cover.classList.toggle('youtube-mode', Boolean(current?.youtubeVideoId));
     cover.classList.toggle('playing', state.isPlaying);
     eyebrow.textContent = current ? (state.isPlaying ? 'REPRODUCIENDO AHORA' : 'EN PAUSA') : 'TU REPRODUCTOR';
     progress.max = String(current?.durationSec ?? 0);
@@ -516,57 +491,56 @@ export function mountPlayer(
     }
   }
 
-  async function searchSpotify(event: SubmitEvent): Promise<void> {
+  async function searchYouTube(event: SubmitEvent): Promise<void> {
     event.preventDefault();
-    const query = spotifySearch.value.trim();
-    if (!query || !spotifyState?.authenticated) return;
-    spotifySearchButton.disabled = true;
-    spotifyResults.replaceChildren();
-    spotifyPlaybackStatus.textContent = 'Buscando en Spotify…';
+    const query = youtubeSearch.value.trim();
+    if (!query) return;
+    youtubeSearchButton.disabled = true;
+    youtubeResults.replaceChildren();
+    youtubeStatus.textContent = 'Buscando en YouTube…';
     try {
-      const tracks = await spotifyClient.searchTracks(query);
+      const tracks = await youtubeClient.searchVideos(query);
       if (tracks.length === 0) {
-        spotifyPlaybackStatus.textContent = 'No se encontraron canciones para esa búsqueda.';
+        youtubeStatus.textContent = 'No se encontraron videos musicales para esa búsqueda.';
         return;
       }
-      spotifyPlaybackStatus.textContent = `${tracks.length} canciones encontradas.`;
+      youtubeStatus.textContent = `${tracks.length} videos encontrados. Selecciona uno para agregarlo y reproducirlo.`;
       for (const track of tracks) {
-        const result = createElement('div', 'spotify-result');
-        if (track.albumImageUrl) {
-          const artwork = createElement('img', 'spotify-result-artwork');
-          artwork.src = track.albumImageUrl;
+        const result = createElement('div', 'youtube-result');
+        if (track.thumbnailUrl) {
+          const artwork = createElement('img', 'youtube-result-artwork');
+          artwork.src = track.thumbnailUrl;
           artwork.alt = '';
           artwork.loading = 'lazy';
           result.append(artwork);
         }
-        const info = createElement('div', 'spotify-result-info');
+        const info = createElement('div', 'youtube-result-info');
         const title = createElement('strong');
         title.textContent = track.title;
         const artist = createElement('span');
         artist.textContent = track.artist;
         info.append(title, artist);
-        const addTrack = createButton(`Agregar ${track.title} a la lista`, 'Agregar', 'spotify-add-button');
+        const addTrack = createButton(`Agregar y reproducir ${track.title}`, 'Escuchar', 'youtube-add-button');
         addTrack.addEventListener('click', () => {
-          if (latestState?.songs.some((song) => song.id === track.id)) {
-            showToast('Esa canción ya está en tu lista.');
-            return;
-          }
           try {
-            player.add(track, player.getSongCount());
-            showToast(`“${track.title}” se agregó a tu lista.`);
+            const wasPlaying = latestState?.isPlaying ?? false;
+            if (!latestState?.songs.some((song) => song.id === track.id)) player.add(track, player.getSongCount());
+            player.selectSong(track.id);
+            if (!wasPlaying) player.play();
+            showToast(`Reproduciendo “${track.title}” desde YouTube.`);
           } catch (error) {
-            showToast(error instanceof Error ? error.message : 'No se pudo agregar la canción.');
+            showToast(error instanceof Error ? error.message : 'No se pudo reproducir ese video.');
           }
         });
         result.append(info, addTrack);
-        spotifyResults.append(result);
+        youtubeResults.append(result);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Spotify no pudo completar la búsqueda.';
-      spotifyPlaybackStatus.textContent = message;
+      const message = error instanceof Error ? error.message : 'YouTube no pudo completar la búsqueda.';
+      youtubeStatus.textContent = message;
       showToast(message);
     } finally {
-      spotifySearchButton.disabled = !spotifyState?.authenticated;
+      youtubeSearchButton.disabled = false;
     }
   }
 

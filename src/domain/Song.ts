@@ -5,9 +5,8 @@ export interface Song {
   readonly artist: string;
   readonly durationSec: number;
   readonly favorite: boolean;
-  readonly spotifyUri?: string;
-  readonly spotifyTrackUrl?: string;
-  readonly albumImageUrl?: string;
+  readonly youtubeVideoId?: string;
+  readonly thumbnailUrl?: string;
 }
 /** Modos disponibles para repetir la reproducción. */
 export type RepeatMode = 'none' | 'all' | 'one';

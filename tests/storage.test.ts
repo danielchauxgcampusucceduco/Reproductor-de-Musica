@@ -38,6 +38,18 @@ describe('persistencia de la playlist', () => {
     expect(loadPlayerState()).toEqual({ songs: [song], currentId: song.id });
   });
 
+  it('migra canciones guardadas con metadatos antiguos sin conservar referencias a Spotify', () => {
+    const oldTrack = {
+      ...song,
+      id: 'spotify-track123',
+      spotifyUri: 'spotify:track:track123',
+      spotifyTrackUrl: 'https://open.spotify.com/track/track123'
+    };
+    stubStorage(new Map([['taller-player-state-v2', JSON.stringify({ songs: [oldTrack], currentId: oldTrack.id })]]));
+
+    expect(loadPlayerState()).toEqual({ songs: [songWithId('spotify-track123')], currentId: 'spotify-track123' });
+  });
+
   it('tolera JSON corrupto y almacenamiento no disponible', () => {
     stubStorage(new Map([['taller-player-state-v2', '{no es json']]));
     expect(loadPlayerState()).toBeNull();
@@ -45,3 +57,7 @@ describe('persistencia de la playlist', () => {
     expect(() => savePlayerState([song], song.id)).not.toThrow();
   });
 });
+
+function songWithId(id: string): Song {
+  return { ...song, id };
+}

@@ -2,6 +2,8 @@
 
 Aplicación web educativa construida con Vite, TypeScript estricto, HTML y CSS. Organiza la playlist con una lista doblemente enlazada y reproduce archivos de audio reales seleccionados desde una carpeta del dispositivo. La lógica de la lista y del reproductor está separada de la interfaz mediante suscripciones a cambios de estado.
 
+También permite buscar videos musicales en YouTube Data API y reproducirlos en el reproductor oficial de YouTube. La búsqueda se sirve a través de una función de Vercel, por lo que `YOUTUBE_API_KEY` solo debe configurarse como variable secreta en Vercel (nunca como `VITE_*`, en el repositorio o en el código del navegador). Render aloja la interfaz estática y consulta de forma segura esa función de Vercel.
+
 ## Instalación y ejecución
 
 Requiere Node.js y npm.
@@ -25,14 +27,24 @@ Ejecuta las pruebas automáticas con `npm test`.
 ```text
 src/
   core/       Nodo y lista doblemente enlazada genérica
-  domain/     Canción, motor de audio intercambiable y controlador
+  domain/     Canción, cliente de YouTube, motores de audio y controlador
   services/  Lectura y escritura del estado en localStorage
   ui/         Coordinación del renderizado y eventos
     components/ Filas, formulario, avisos, iconos y visualizador
   styles/     Tokens, componentes y animaciones
   main.ts     Punto de entrada y conexión de las capas
 tests/        Pruebas de la lista y del controlador
+api/          Función segura de búsqueda de YouTube alojada en Vercel
 ```
+
+## Configuración de YouTube en la nube
+
+1. En Google Cloud habilita **YouTube Data API v3** y crea una clave de API. Restringe la clave a esa API; si es posible, configura también restricciones de aplicación.
+2. En Vercel, abre **Project → Settings → Environment Variables** y añade `YOUTUBE_API_KEY` con la clave como variable secreta del entorno Production (y Preview si lo necesitas). No añadas el prefijo `VITE_`.
+3. Despliega el proyecto en Vercel. La función `/api/youtube/search` devuelve solo los metadatos necesarios y aplica CORS para el dominio Vercel y Render de este proyecto.
+4. Render publica únicamente el frontend estático; no necesita recibir la clave. Si usas un dominio personalizado, añádelo a `allowedOrigins` en `api/youtube/search.ts` y vuelve a desplegar Vercel.
+
+La búsqueda usa `search.list` y `videos.list` para verificar duración y miniatura. Si Google rechaza la clave, revisa que YouTube Data API v3 esté habilitada y que las restricciones de clave permitan usarla. YouTube puede rechazar la inserción de algunos videos; los videos devueltos son filtrados por disponibilidad de inserción, pero el propietario puede cambiar esos permisos más adelante.
 
 ## Lista doblemente enlazada
 
@@ -77,6 +89,7 @@ null ← [prev | Canción A | next] ⇄ [prev | Canción B | next] ⇄ [prev | C
 - Carátulas SVG distintas por canción y artista, con disco, órbitas y barras de onda que se animan durante la reproducción; miniaturas sincronizadas en cada fila.
 - Búsqueda instantánea, filtro de favoritas, contador y duración total.
 - Reproducción local real desde una carpeta, sin subir canciones a un servidor ni incluir música de muestra codificada en el proyecto.
+- Búsqueda en YouTube con clave mantenida en el servidor y reproducción integrada con el reproductor oficial, conservando sus controles y atribución.
 
 La reproducción depende de los formatos que el navegador y el sistema puedan decodificar. Al importar una carpeta se leen metadatos de audio; los archivos no compatibles se omiten. El navegador solo entrega acceso a los archivos elegidos en esa sesión, por lo que se debe volver a seleccionar la carpeta después de recargar.
 

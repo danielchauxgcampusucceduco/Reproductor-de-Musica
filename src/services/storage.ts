@@ -43,21 +43,22 @@ function isSong(value: unknown): value is Song {
     && Number.isSafeInteger(candidate.durationSec)
     && candidate.durationSec > 0
     && typeof candidate.favorite === 'boolean'
-    && (candidate.spotifyUri === undefined || isSpotifyTrackUri(candidate.spotifyUri))
-    && (candidate.spotifyTrackUrl === undefined || isSpotifyTrackUrl(candidate.spotifyTrackUrl))
-    && (candidate.albumImageUrl === undefined || isSpotifyAlbumImageUrl(candidate.albumImageUrl));
+    && (candidate.youtubeVideoId === undefined || isYouTubeVideoId(candidate.youtubeVideoId))
+    && (candidate.thumbnailUrl === undefined || isYouTubeThumbnailUrl(candidate.thumbnailUrl));
 }
 
-function isSpotifyTrackUri(value: unknown): value is string {
-  return typeof value === 'string' && /^spotify:track:[A-Za-z0-9]+$/.test(value);
+function isYouTubeVideoId(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{11}$/.test(value);
 }
 
-function isSpotifyTrackUrl(value: unknown): value is string {
-  return typeof value === 'string' && /^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]+(?:\?.*)?$/.test(value);
-}
-
-function isSpotifyAlbumImageUrl(value: unknown): value is string {
-  return typeof value === 'string' && /^https:\/\/i\.scdn\.co\/image\/[A-Za-z0-9]+$/.test(value);
+function isYouTubeThumbnailUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && ['i.ytimg.com', 'img.youtube.com'].includes(url.hostname) && url.pathname.length > 1;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeSongs(values: readonly unknown[]): Song[] {
@@ -66,7 +67,15 @@ function normalizeSongs(values: readonly unknown[]): Song[] {
   for (const value of values) {
     if (!isSong(value) || ids.has(value.id)) continue;
     ids.add(value.id);
-    songs.push(value);
+    songs.push({
+      id: value.id,
+      title: value.title,
+      artist: value.artist,
+      durationSec: value.durationSec,
+      favorite: value.favorite,
+      ...(value.youtubeVideoId ? { youtubeVideoId: value.youtubeVideoId } : {}),
+      ...(value.thumbnailUrl ? { thumbnailUrl: value.thumbnailUrl } : {})
+    });
   }
   return songs;
 }

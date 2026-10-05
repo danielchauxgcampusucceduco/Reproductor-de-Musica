@@ -16,6 +16,8 @@ export interface AudioEngine {
   setEndedHandler?(handler: () => void): void;
   /** Registra un error reproducible para comunicarlo desde la interfaz. */
   setErrorHandler?(handler: () => void): void;
+  /** Sincroniza controles propios cuando un reproductor integrado cambia su estado nativo. */
+  setPlaybackStateHandler?(handler: (isPlaying: boolean) => void): void;
   /** Indica si la canción tiene un archivo local asociado. */
   hasFile?(songId: string): boolean;
   /** Libera archivos que ya no pertenecen a la playlist. */

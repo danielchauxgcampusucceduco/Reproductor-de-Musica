@@ -1,54 +1,54 @@
 import type { AudioEngine, BrowserAudioEngine } from './AudioEngine';
-import type { SpotifyPlaybackEngine } from './SpotifyPlaybackEngine';
+import type { YouTubePlaybackEngine } from './YouTubePlaybackEngine';
 import type { Song } from './Song';
 
-type PlaybackSource = 'local' | 'spotify' | 'metadata';
+type PlaybackSource = 'local' | 'youtube' | 'metadata';
 
-/** Enruta canciones locales y de Spotify por sus motores sin cambiar el controlador de lista. */
+/** Enruta archivos locales y videos de YouTube por sus motores oficiales. */
 export class HybridAudioEngine implements AudioEngine {
   private source: PlaybackSource = 'metadata';
 
   public constructor(
     private readonly local: BrowserAudioEngine,
-    private readonly spotify: SpotifyPlaybackEngine
+    private readonly youtube: YouTubePlaybackEngine
   ) {}
 
   public play(song: Song, positionSec: number): void {
     this.source = sourceFor(song, this.local);
-    if (this.source === 'spotify') {
+    if (this.source === 'youtube') {
       this.local.pause();
-      void this.spotify.play(song.spotifyUri!, positionSec).catch((error: unknown) => this.reportError(error));
+      this.youtube.play(song, positionSec);
       return;
     }
-    this.spotify.pause();
+    this.youtube.pause();
     if (this.source === 'local') this.local.play(song, positionSec);
     else this.local.pause();
   }
 
   public pause(): void {
-    if (this.source === 'spotify') this.spotify.pause();
+    if (this.source === 'youtube') this.youtube.pause();
     else this.local.pause();
   }
 
   public seek(positionSec: number, song?: Song): void {
     if (song) this.source = sourceFor(song, this.local);
-    if (this.source === 'spotify') this.spotify.seek(positionSec);
+    if (this.source === 'youtube') this.youtube.seek(positionSec, song);
     else if (this.source === 'local' && song) this.local.seek(positionSec, song);
     else if (this.source === 'local') this.local.seek(positionSec);
     else {
       this.local.pause();
-      this.spotify.pause();
+      this.youtube.pause();
     }
   }
 
   public setVolume(volume: number): void {
     this.local.setVolume(volume);
-    this.spotify.setVolume(volume);
+    this.youtube.setVolume(volume);
   }
 
   public getCurrentTime(): number | null {
-    return this.source === 'spotify'
-      ? this.spotify.getCurrentTime()
+    return this.source === 'youtube'
+      ? this.youtube.getCurrentTime()
       : this.source === 'local'
         ? this.local.getCurrentTime()
         : null;
@@ -56,13 +56,16 @@ export class HybridAudioEngine implements AudioEngine {
 
   public setEndedHandler(handler: () => void): void {
     this.local.setEndedHandler(handler);
-    this.spotify.setEndedHandler(handler);
+    this.youtube.setEndedHandler(handler);
   }
 
   public setErrorHandler(handler: (error?: Error) => void): void {
-    this.errorHandler = handler;
     this.local.setErrorHandler(() => handler());
-    this.spotify.setErrorHandler(handler);
+    this.youtube.setErrorHandler(() => handler(new Error('YouTube no pudo reproducir este video. Puede estar bloqueado para inserción.')));
+  }
+
+  public setPlaybackStateHandler(handler: (isPlaying: boolean) => void): void {
+    this.youtube.setPlaybackStateHandler(handler);
   }
 
   public hasFile(songId: string): boolean { return this.local.hasFile(songId); }
@@ -70,19 +73,11 @@ export class HybridAudioEngine implements AudioEngine {
 
   public dispose(): void {
     this.local.dispose();
-    this.spotify.dispose();
+    this.youtube.dispose();
   }
-
-  private reportError(error: unknown): void {
-    const message = error instanceof Error ? error.message : 'No se pudo iniciar la reproducción de Spotify.';
-    // The Spotify engine reports SDK errors directly; this path handles rejected start requests.
-    this.errorHandler?.(new Error(message));
-  }
-
-  private errorHandler: ((error?: Error) => void) | null = null;
 }
 
 function sourceFor(song: Song, local: BrowserAudioEngine): PlaybackSource {
-  if (song.spotifyUri) return 'spotify';
+  if (song.youtubeVideoId) return 'youtube';
   return local.hasFile(song.id) ? 'local' : 'metadata';
 }

@@ -46,6 +46,7 @@ export class MusicPlayer {
     this.currentNode ??= this.playlist.head;
     this.resetShuffleHistory();
     this.audioEngine.setEndedHandler?.(() => this.handleAudioEnded());
+    this.audioEngine.setPlaybackStateHandler?.((isPlaying) => this.handleExternalPlaybackState(isPlaying));
   }
 
   /** O(1). Suscribe una vista y devuelve una función para cancelar la suscripción. */
@@ -299,6 +300,22 @@ export class MusicPlayer {
     this.next();
   }
 
+  private handleExternalPlaybackState(isPlaying: boolean): void {
+    if (!this.currentNode || this.isPlaying === isPlaying) return;
+    this.isPlaying = isPlaying;
+    if (isPlaying) {
+      if (!this.timer) this.timer = setInterval(() => this.tick(), 1000);
+    } else {
+      const actualTime = this.audioEngine.getCurrentTime?.();
+      if (actualTime !== undefined && actualTime !== null && Number.isFinite(actualTime)) {
+        this.elapsedSec = Math.max(0, Math.min(Math.floor(actualTime), this.currentNode.value.durationSec));
+      }
+      if (this.timer) clearInterval(this.timer);
+      this.timer = null;
+    }
+    this.emit();
+  }
+
   private nextShuffledNode(): DoublyLinkedNode<Song> | null {
     if (this.historyNode?.next) {
       const historyNext = this.historyNode.next.value;
@@ -395,13 +412,21 @@ function assertValidSong(song: Song): void {
   if (typeof song.favorite !== 'boolean') {
     throw new Error('El estado de favorita de la canción debe ser válido.');
   }
-  if (song.spotifyUri !== undefined && !/^spotify:track:[A-Za-z0-9]+$/.test(song.spotifyUri)) {
-    throw new Error('El URI de Spotify de la canción no es válido.');
+  if (song.youtubeVideoId !== undefined && !/^[A-Za-z0-9_-]{11}$/.test(song.youtubeVideoId)) {
+    throw new Error('El identificador de video de YouTube no es válido.');
   }
-  if (song.spotifyTrackUrl !== undefined && !/^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]+(?:\?.*)?$/.test(song.spotifyTrackUrl)) {
-    throw new Error('El enlace de Spotify de la canción no es válido.');
+  if (song.thumbnailUrl !== undefined && !isYouTubeThumbnailUrl(song.thumbnailUrl)) {
+    throw new Error('La miniatura de YouTube no es válida.');
   }
-  if (song.albumImageUrl !== undefined && !/^https:\/\/i\.scdn\.co\/image\/[A-Za-z0-9]+$/.test(song.albumImageUrl)) {
-    throw new Error('La carátula de Spotify de la canción no es válida.');
+}
+
+function isYouTubeThumbnailUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && ['i.ytimg.com', 'img.youtube.com'].includes(url.hostname)
+      && url.pathname.length > 1;
+  } catch {
+    return false;
   }
 }

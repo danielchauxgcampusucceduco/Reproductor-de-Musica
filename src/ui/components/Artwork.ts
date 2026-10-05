@@ -11,7 +11,7 @@ export function createArtwork(title: string, artist: string, imageUrl?: string):
   const gradientId = `art-gradient-${artworkSequence}`;
   const glowId = `art-glow-${artworkSequence}`;
   const art = createElement('div', 'artwork');
-  if (imageUrl && /^https:\/\/i\.scdn\.co\/image\/[A-Za-z0-9]+$/.test(imageUrl)) {
+  if (imageUrl && isAllowedArtworkUrl(imageUrl)) {
     const image = createElement('img', 'artwork-image');
     image.src = imageUrl;
     image.alt = '';
@@ -94,6 +94,15 @@ export function createArtwork(title: string, artist: string, imageUrl?: string):
   svg.append(createSvg('rect', { x: '24', y: '28', width: '352', height: '344', rx: '22', class: 'art-frame' }));
   art.append(svg);
   return art;
+}
+
+function isAllowedArtworkUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && ['i.ytimg.com', 'img.youtube.com'].includes(url.hostname) && url.pathname.length > 1;
+  } catch {
+    return false;
+  }
 }
 
 function createSvg<K extends keyof SVGElementTagNameMap>(tag: K, attributes: Record<string, string> = {}): SVGElementTagNameMap[K] {

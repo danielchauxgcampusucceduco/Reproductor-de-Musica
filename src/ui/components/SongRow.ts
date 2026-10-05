@@ -41,7 +41,7 @@ export function createSongRow(
 
   const thumbnail = createElement('div', 'thumb');
   thumbnail.setAttribute('aria-hidden', 'true');
-  thumbnail.append(createArtwork(song.title, song.artist, song.albumImageUrl));
+  thumbnail.append(createArtwork(song.title, song.artist, song.thumbnailUrl));
   const info = createElement('div', 'song-info');
   const select = createButton(`Reproducir ${song.title} de ${song.artist}`, song.title, 'track-title');
   select.addEventListener('click', () => actions.select(song.id));

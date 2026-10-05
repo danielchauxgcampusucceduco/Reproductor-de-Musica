@@ -4,8 +4,8 @@ import './styles/animations.css';
 import { MusicPlayer } from './domain/MusicPlayer';
 import { BrowserAudioEngine } from './domain/AudioEngine';
 import { HybridAudioEngine } from './domain/HybridAudioEngine';
-import { SpotifyClient } from './domain/SpotifyClient';
-import { SpotifyPlaybackEngine } from './domain/SpotifyPlaybackEngine';
+import { YouTubeClient } from './domain/YouTubeClient';
+import { YouTubePlaybackEngine } from './domain/YouTubePlaybackEngine';
 import { loadPlayerState, savePlayerState } from './services/storage';
 import { mountPlayer } from './ui/render';
 import { showToast } from './ui/components/Toast';
@@ -15,9 +15,9 @@ if (!root) throw new Error('No se encontró el contenedor principal de la aplica
 
 const savedState = loadPlayerState();
 const localAudioEngine = new BrowserAudioEngine();
-const spotifyClient = new SpotifyClient(import.meta.env.VITE_SPOTIFY_CLIENT_ID ?? '');
-const spotifyPlayback = new SpotifyPlaybackEngine(spotifyClient);
-const audioEngine = new HybridAudioEngine(localAudioEngine, spotifyPlayback);
+const youtubeClient = new YouTubeClient();
+const youtubePlayback = new YouTubePlaybackEngine();
+const audioEngine = new HybridAudioEngine(localAudioEngine, youtubePlayback);
 const player = new MusicPlayer(savedState?.songs ?? [], savedState?.currentId, audioEngine);
 audioEngine.setErrorHandler((error) => {
   player.pause();
@@ -32,7 +32,7 @@ try {
 
 let lastSavedVersion = -1;
 let lastSavedCurrentId: string | null | undefined;
-mountPlayer(root, player, localAudioEngine, spotifyClient, spotifyPlayback, (state) => {
+mountPlayer(root, player, localAudioEngine, youtubeClient, youtubePlayback, (state) => {
   const currentId = state.current?.id ?? null;
   if (state.playlistVersion === lastSavedVersion && currentId === lastSavedCurrentId) return;
   lastSavedVersion = state.playlistVersion;
@@ -41,7 +41,5 @@ mountPlayer(root, player, localAudioEngine, spotifyClient, spotifyPlayback, (sta
   const persistentCurrentId = persistentSongs.some((song) => song.id === currentId) ? currentId : null;
   savePlayerState(persistentSongs, persistentCurrentId);
 });
-
-void spotifyClient.initialize();
 
 window.addEventListener('pagehide', () => player.destroy(), { once: true });
