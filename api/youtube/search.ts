@@ -14,6 +14,18 @@ interface YouTubeVideoItem {
 
 interface YouTubeListResponse<T> { items?: T[]; }
 
+interface VercelRequest {
+  method?: string;
+  url?: string;
+  headers: Record<string, string | string[] | undefined>;
+}
+
+interface VercelResponse {
+  statusCode: number;
+  setHeader(name: string, value: string): void;
+  end(body?: string): void;
+}
+
 declare const process: { env: Record<string, string | undefined> };
 
 const allowedOrigins = new Set([
@@ -25,10 +37,13 @@ const allowedOrigins = new Set([
 const cache = new Map<string, { expiresAt: number; body: string }>();
 const cacheDurationMs = 10 * 60 * 1000;
 
-/** Endpoint server-side: mantiene la clave fuera del navegador y limita la respuesta a metadatos públicos. */
-export default async function handler(request: Request): Promise<Response> {
-  const origin = request.headers.get('origin') ?? '';
-  if (!isAllowedOrigin(origin)) return json({ error: { message: 'Origen no autorizado.' } }, 403);
+/** Endpoint Node.js de Vercel: mantiene la clave fuera del navegador y limita la respuesta a metadatos públicos. */
+export default async function handler(request: VercelRequest, response: VercelResponse): Promise<void> {
+  const origin = headerValue(request.headers.origin);
+  if (!isAllowedOrigin(origin)) {
+    sendJson(response, 403, { error: { message: 'Origen no autorizado.' } });
+    return;
+  }
   const corsHeaders = {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -36,18 +51,32 @@ export default async function handler(request: Request): Promise<Response> {
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin'
   };
-  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
-  if (request.method !== 'GET') return json({ error: { message: 'Método no permitido.' } }, 405, corsHeaders);
+  if (request.method === 'OPTIONS') {
+    send(response, 204, '', corsHeaders);
+    return;
+  }
+  if (request.method !== 'GET') {
+    sendJson(response, 405, { error: { message: 'Método no permitido.' } }, corsHeaders);
+    return;
+  }
 
-  const query = new URL(request.url).searchParams.get('q')?.trim() ?? '';
-  if (!query || query.length > 120) return json({ error: { message: 'Escribe una búsqueda de hasta 120 caracteres.' } }, 400, corsHeaders);
+  const host = headerValue(request.headers.host) || 'reproductor-de-musica-sable.vercel.app';
+  const query = new URL(request.url ?? '/', `https://${host}`).searchParams.get('q')?.trim() ?? '';
+  if (!query || query.length > 120) {
+    sendJson(response, 400, { error: { message: 'Escribe una búsqueda de hasta 120 caracteres.' } }, corsHeaders);
+    return;
+  }
   const cached = cache.get(query.toLocaleLowerCase());
   if (cached && cached.expiresAt > Date.now()) {
-    return new Response(cached.body, { status: 200, headers: responseHeaders(corsHeaders, true) });
+    send(response, 200, cached.body, responseHeaders(corsHeaders, true));
+    return;
   }
 
   const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) return json({ error: { message: 'La búsqueda de YouTube aún no está configurada en el servidor.' } }, 503, corsHeaders);
+  if (!apiKey) {
+    sendJson(response, 503, { error: { message: 'La búsqueda de YouTube aún no está configurada en el servidor.' } }, corsHeaders);
+    return;
+  }
 
   try {
     const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
@@ -61,7 +90,11 @@ export default async function handler(request: Request): Promise<Response> {
       q: query
     }).toString();
     const searchResponse = await fetch(searchUrl, { headers: { 'x-goog-api-key': apiKey, Accept: 'application/json' } });
-    if (!searchResponse.ok) return upstreamError(searchResponse.status, await readPayload(searchResponse), corsHeaders);
+    if (!searchResponse.ok) {
+      const error = getUpstreamError(searchResponse.status, await readPayload(searchResponse));
+      sendJson(response, error.status, { error: { message: error.message } }, corsHeaders);
+      return;
+    }
     const searchResult = await searchResponse.json() as YouTubeListResponse<YouTubeSearchItem>;
     const searchItems = Array.isArray(searchResult.items) ? searchResult.items : [];
     const metadata = searchItems.flatMap((item) => {
@@ -76,12 +109,19 @@ export default async function handler(request: Request): Promise<Response> {
         ? [{ videoId, title, artist, thumbnailUrl }]
         : [];
     });
-    if (metadata.length === 0) return json({ items: [] }, 200, corsHeaders, true);
+    if (metadata.length === 0) {
+      sendJson(response, 200, { items: [] }, corsHeaders, true);
+      return;
+    }
 
     const detailsUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
     detailsUrl.search = new URLSearchParams({ part: 'contentDetails', id: metadata.map(({ videoId }) => videoId).join(',') }).toString();
     const detailsResponse = await fetch(detailsUrl, { headers: { 'x-goog-api-key': apiKey, Accept: 'application/json' } });
-    if (!detailsResponse.ok) return upstreamError(detailsResponse.status, await readPayload(detailsResponse), corsHeaders);
+    if (!detailsResponse.ok) {
+      const error = getUpstreamError(detailsResponse.status, await readPayload(detailsResponse));
+      sendJson(response, error.status, { error: { message: error.message } }, corsHeaders);
+      return;
+    }
     const detailsResult = await detailsResponse.json() as YouTubeListResponse<YouTubeVideoItem>;
     const durations = new Map<string, number>();
     for (const item of Array.isArray(detailsResult.items) ? detailsResult.items : []) {
@@ -97,9 +137,9 @@ export default async function handler(request: Request): Promise<Response> {
     const body = JSON.stringify({ items });
     cache.set(query.toLocaleLowerCase(), { expiresAt: Date.now() + cacheDurationMs, body });
     while (cache.size > 100) cache.delete(cache.keys().next().value as string);
-    return new Response(body, { status: 200, headers: responseHeaders(corsHeaders, true) });
+    send(response, 200, body, responseHeaders(corsHeaders, true));
   } catch {
-    return json({ error: { message: 'No se pudo consultar YouTube. Inténtalo de nuevo más tarde.' } }, 502, corsHeaders);
+    sendJson(response, 502, { error: { message: 'No se pudo consultar YouTube. Inténtalo de nuevo más tarde.' } }, corsHeaders);
   }
 }
 
@@ -130,7 +170,7 @@ function parseDuration(value: string): number {
   return (Number(match[1] ?? 0) * 3600) + (Number(match[2] ?? 0) * 60) + Number(match[3] ?? 0);
 }
 
-function upstreamError(status: number, payload: unknown, corsHeaders: Record<string, string>): Response {
+function getUpstreamError(status: number, payload: unknown): { status: number; message: string } {
   const details = asRecord(asRecord(payload)?.error);
   const reasons = Array.isArray(details?.errors)
     ? details.errors.flatMap((entry) => typeof asRecord(entry)?.reason === 'string' ? [asRecord(entry)?.reason as string] : [])
@@ -143,19 +183,29 @@ function upstreamError(status: number, payload: unknown, corsHeaders: Record<str
       : status === 429
         ? 'YouTube limitó las búsquedas temporalmente. Inténtalo en unos minutos.'
         : 'YouTube rechazó la búsqueda. Comprueba que YouTube Data API v3 esté habilitada para la clave.';
-  return json({ error: { message } }, quotaExceeded || status === 429 ? 429 : status === 403 ? 403 : 502, corsHeaders);
+  return { status: quotaExceeded || status === 429 ? 429 : status === 403 ? 403 : 502, message };
 }
 
-function responseHeaders(corsHeaders: Record<string, string>, cached: boolean): Headers {
-  return new Headers({
+function responseHeaders(corsHeaders: Record<string, string>, cached: boolean): Record<string, string> {
+  return {
     ...corsHeaders,
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': `public, s-maxage=${cached ? 600 : 60}, stale-while-revalidate=120`
-  });
+  };
 }
 
-function json(value: unknown, status: number, corsHeaders: Record<string, string> = {}, cached = false): Response {
-  return new Response(JSON.stringify(value), { status, headers: responseHeaders(corsHeaders, cached) });
+function sendJson(response: VercelResponse, status: number, value: unknown, corsHeaders: Record<string, string> = {}, cached = false): void {
+  send(response, status, JSON.stringify(value), responseHeaders(corsHeaders, cached));
+}
+
+function send(response: VercelResponse, status: number, body: string, headers: Record<string, string>): void {
+  response.statusCode = status;
+  for (const [name, value] of Object.entries(headers)) response.setHeader(name, value);
+  response.end(body);
+}
+
+function headerValue(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
 }
 
 async function readPayload(response: Response): Promise<unknown> {

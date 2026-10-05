@@ -17,11 +17,7 @@ describe('función privada de búsqueda de YouTube', () => {
       }] }))
       .mockResolvedValueOnce(Response.json({ items: [{ id: 'abcdefghijk', contentDetails: { duration: 'PT3M39S' } }] }));
     vi.stubGlobal('fetch', fetch);
-    const request = new Request(`https://reproductor-de-musica-sable.vercel.app/api/youtube/search?q=prueba-${Date.now()}`, {
-      headers: { origin: 'https://reproductor-de-musica-sable.vercel.app' }
-    });
-
-    const response = await handler(request);
+    const response = await invoke(`https://reproductor-de-musica-sable.vercel.app/api/youtube/search?q=prueba-${Date.now()}`, 'https://reproductor-de-musica-sable.vercel.app');
     const body = await response.json() as { items: Array<Record<string, unknown>> };
     const firstCall = fetch.mock.calls[0] as unknown as [URL, RequestInit];
 
@@ -36,9 +32,7 @@ describe('función privada de búsqueda de YouTube', () => {
   it('rechaza llamadas de dominios no aprobados antes de consultar Google', async () => {
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
-    const response = await handler(new Request('https://host.example/api/youtube/search?q=test', {
-      headers: { origin: 'https://host.example' }
-    }));
+    const response = await invoke('https://host.example/api/youtube/search?q=test', 'https://host.example');
 
     expect(response.status).toBe(403);
     expect(fetch).not.toHaveBeenCalled();
@@ -48,11 +42,26 @@ describe('función privada de búsqueda de YouTube', () => {
     vi.stubEnv('YOUTUBE_API_KEY', '');
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
-    const response = await handler(new Request(`https://reproductor-de-musica-sable.vercel.app/api/youtube/search?q=sin-clave-${Date.now()}`, {
-      headers: { origin: 'https://reproductor-de-musica-sable.vercel.app' }
-    }));
+    const response = await invoke(`https://reproductor-de-musica-sable.vercel.app/api/youtube/search?q=sin-clave-${Date.now()}`, 'https://reproductor-de-musica-sable.vercel.app');
 
     expect(response.status).toBe(503);
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+async function invoke(url: string, origin: string, method = 'GET'): Promise<Response> {
+  const parsed = new URL(url);
+  const headers = new Map<string, string>();
+  let body = '';
+  const response = {
+    statusCode: 200,
+    setHeader: (name: string, value: string) => headers.set(name.toLocaleLowerCase(), value),
+    end: (value = '') => { body = value; }
+  };
+  await handler({
+    method,
+    url: `${parsed.pathname}${parsed.search}`,
+    headers: { origin, host: parsed.host }
+  }, response);
+  return new Response(body || null, { status: response.statusCode, headers: Object.fromEntries(headers) });
+}
