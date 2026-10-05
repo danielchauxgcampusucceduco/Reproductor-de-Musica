@@ -7,7 +7,7 @@ let artworkSequence = 0;
 export function createArtwork(title: string, artist: string, imageUrl?: string): HTMLDivElement {
   artworkSequence += 1;
   const seed = hash(`${title}\u0000${artist}`);
-  const hue = 37 + (seed % 17);
+  const hue = 318 + (seed % 42);
   const gradientId = `art-gradient-${artworkSequence}`;
   const glowId = `art-glow-${artworkSequence}`;
   const art = createElement('div', 'artwork');
@@ -24,18 +24,18 @@ export function createArtwork(title: string, artist: string, imageUrl?: string):
   const svg = createSvg('svg', { viewBox: '0 0 400 400', preserveAspectRatio: 'xMidYMid slice' });
   const definitions = createSvg('defs');
   const backgroundGradient = createSvg('linearGradient', { id: gradientId, x1: '0', y1: '1', x2: '1', y2: '0' });
-  addStop(backgroundGradient, '0%', '#08090a');
-  addStop(backgroundGradient, '52%', `hsl(${hue} 28% 16%)`);
-  addStop(backgroundGradient, '100%', `hsl(${hue + 3} 43% 29%)`);
+  addStop(backgroundGradient, '0%', '#100d14');
+  addStop(backgroundGradient, '52%', `hsl(${hue} 30% 17%)`);
+  addStop(backgroundGradient, '100%', `hsl(${hue + 3} 48% 32%)`);
   const radialGlow = createSvg('radialGradient', { id: glowId });
-  addStop(radialGlow, '0%', `hsla(${hue + 8}, 88%, 78%, .72)`);
-  addStop(radialGlow, '100%', `hsla(${hue + 8}, 75%, 67%, 0)`);
+  addStop(radialGlow, '0%', `hsla(${hue + 8}, 90%, 82%, .72)`);
+  addStop(radialGlow, '100%', `hsla(${hue + 8}, 78%, 68%, 0)`);
   definitions.append(backgroundGradient, radialGlow);
   svg.append(definitions);
   svg.append(createSvg('rect', { width: '400', height: '400', fill: `url(#${gradientId})` }));
   svg.append(createSvg('path', {
     d: 'M0 0H400V118C302 96 214 146 116 111 71 95 36 81 0 93Z',
-    fill: 'rgba(255,255,255,.035)'
+    fill: 'rgba(255,255,255,.055)'
   }));
 
   const glow = createSvg('circle', { cx: String(82 + (seed % 70)), cy: String(75 + (seed % 48)), r: '150', fill: `url(#${glowId})`, class: 'art-glow' });
@@ -50,10 +50,10 @@ export function createArtwork(title: string, artist: string, imageUrl?: string):
   }
 
   const disc = createSvg('g', { class: 'art-disc' });
-  disc.append(createSvg('circle', { cx: '224', cy: '203', r: '104', fill: 'rgba(3, 3, 3, .78)', stroke: 'rgba(239,218,165,.5)', 'stroke-width': '1.5' }));
-  disc.append(createSvg('circle', { cx: '224', cy: '203', r: '87', fill: 'none', stroke: 'rgba(239,218,165,.19)', 'stroke-width': '1' }));
-  disc.append(createSvg('circle', { cx: '224', cy: '203', r: '66', fill: 'none', stroke: 'rgba(239,218,165,.24)', 'stroke-width': '1' }));
-  disc.append(createSvg('circle', { cx: '224', cy: '203', r: '44', fill: `hsl(${hue + 2} 47% 66%)`, opacity: '.96' }));
+  disc.append(createSvg('circle', { cx: '224', cy: '203', r: '104', fill: 'rgba(3, 3, 3, .78)', stroke: 'rgba(255,220,230,.58)', 'stroke-width': '1.5' }));
+  disc.append(createSvg('circle', { cx: '224', cy: '203', r: '87', fill: 'none', stroke: 'rgba(255,230,237,.2)', 'stroke-width': '1' }));
+  disc.append(createSvg('circle', { cx: '224', cy: '203', r: '66', fill: 'none', stroke: 'rgba(255,230,237,.27)', 'stroke-width': '1' }));
+  disc.append(createSvg('circle', { cx: '224', cy: '203', r: '44', fill: `hsl(${hue + 2} 58% 72%)`, opacity: '.96' }));
   disc.append(createSvg('circle', { cx: '224', cy: '203', r: '9', fill: 'rgba(10,9,7,.88)' }));
   svg.append(disc);
 
@@ -77,7 +77,7 @@ export function createArtwork(title: string, artist: string, imageUrl?: string):
   }
   svg.append(createSvg('rect', {
     x: '29', y: '292', width: '342', height: '76', rx: '16',
-    fill: 'rgba(8, 8, 7, .74)', stroke: 'rgba(239,218,165,.28)', 'stroke-width': '1'
+    fill: 'rgba(8, 6, 11, .74)', stroke: 'rgba(255,225,233,.34)', 'stroke-width': '1'
   }));
   svg.append(waveform);
   const coverTitle = createSvg('text', {

@@ -30,10 +30,10 @@ export function mountPlayer(
   const heading = createElement('h1');
   heading.textContent = 'Reproductor de Música';
   const subtitle = createElement('p');
-  subtitle.textContent = 'Taller de estructuras · Edición Oro';
+  subtitle.textContent = 'Tu música, a tu manera · Listas dobles';
   brandCopy.append(heading, subtitle);
   brand.append(brandMark, brandCopy);
-  const themeButton = createIconButton('Cambiar tema', document.documentElement.dataset.theme === 'light' ? 'moon' : 'sun', 'theme');
+  const themeButton = createIconButton('Cambiar tema', document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 'theme');
   header.append(brand, themeButton);
   app.append(header);
 
@@ -84,10 +84,13 @@ export function mountPlayer(
   const playlistCard = createElement('aside', 'card side');
   const listHeading = createElement('h2', 'section-title');
   const listTitle = createElement('span');
-  listTitle.textContent = 'Tu lista';
+  listTitle.textContent = 'Lista de reproducción';
   const songCount = createElement('span', 'badge');
   listHeading.append(listTitle, songCount);
 
+  const librarySection = createElement('section', 'content-section library-section');
+  const libraryHeading = createElement('h3', 'subsection-title');
+  libraryHeading.textContent = 'Tu música local';
   const folderTools = createElement('div', 'library-tools');
   const folderButton = createButton('Seleccionar una carpeta con archivos de música', 'Cargar carpeta de música', 'folder-button');
   folderButton.prepend(createIcon('folder'));
@@ -106,24 +109,21 @@ export function mountPlayer(
   const folderStatus = createElement('p', 'folder-status');
   folderStatus.setAttribute('aria-live', 'polite');
   folderTools.append(folderButton, folderHint, folderPrivacyHint, folderPicker, folderStatus);
+  librarySection.append(libraryHeading, folderTools);
 
   const spotifyTools = createElement('section', 'spotify-tools');
   spotifyTools.setAttribute('aria-label', 'Buscar música con Spotify');
   const spotifyHeading = createElement('h3', 'spotify-heading');
-  spotifyHeading.textContent = 'Spotify Premium';
+  spotifyHeading.textContent = 'Escucha con Spotify';
   const spotifyDescription = createElement('p', 'spotify-description');
-  spotifyDescription.textContent = 'Busca canciones y agrégalas a tu lista para reproducirlas desde Spotify.';
+  spotifyDescription.textContent = 'Inicia sesión en Spotify para buscar música y agregarla a tu lista. Para reproducirla necesitas Premium.';
   const spotifyConnectionForm = createElement('form', 'spotify-connect-form');
   spotifyConnectionForm.noValidate = true;
-  const spotifyClientIdField = makeField('Client ID público', 'Client ID de Spotify', 'Pega el Client ID de Spotify', 'spotify-client-id');
-  spotifyClientIdField.input.value = spotifyClient.clientId;
-  spotifyClientIdField.input.autocomplete = 'off';
-  spotifyClientIdField.input.spellcheck = false;
-  const spotifyConnectButton = createButton('Conectar con Spotify', 'Conectar Spotify', 'primary');
+  const spotifyConnectButton = createButton('Iniciar sesión en Spotify', 'Iniciar sesión en Spotify', 'primary');
   spotifyConnectButton.type = 'submit';
   const spotifyDisconnectButton = createButton('Desconectar Spotify', 'Desconectar', 'filter-button');
   spotifyDisconnectButton.hidden = true;
-  spotifyConnectionForm.append(spotifyClientIdField.wrapper, spotifyConnectButton, spotifyDisconnectButton);
+  spotifyConnectionForm.append(spotifyConnectButton, spotifyDisconnectButton);
   const spotifyStatus = createElement('p', 'spotify-status');
   spotifyStatus.setAttribute('aria-live', 'polite');
   const spotifyPlaybackStatus = createElement('p', 'spotify-playback-status');
@@ -142,6 +142,9 @@ export function mountPlayer(
   spotifyResults.setAttribute('aria-live', 'polite');
   spotifyTools.append(spotifyHeading, spotifyDescription, spotifyConnectionForm, spotifyStatus, spotifyPlaybackStatus, spotifySearchForm, spotifyResults);
 
+  const manualSection = createElement('section', 'content-section manual-section');
+  const manualHeading = createElement('h3', 'subsection-title');
+  manualHeading.textContent = 'Añadir canción manualmente';
   const form = createElement('form', 'add-form');
   form.noValidate = true;
   const titleField = makeField('Título', 'Título de la canción', 'Ej. Luces de ciudad', 'song-title');
@@ -167,6 +170,7 @@ export function mountPlayer(
   const addButton = createButton('Agregar canción a la lista', 'Agregar canción', 'primary full');
   addButton.prepend(createIcon('plus'));
   form.append(titleField.wrapper, artistField.wrapper, durationField.wrapper, positionField, customPositionField.wrapper, preview, addButton);
+  manualSection.append(manualHeading, form);
 
   const search = createElement('input', 'search-input');
   search.type = 'search';
@@ -182,7 +186,9 @@ export function mountPlayer(
   playlist.setAttribute('aria-live', 'polite');
   const shortcuts = createElement('p', 'shortcuts');
   shortcuts.textContent = 'Atajos: Espacio reproducir/pausar · ← anterior · → siguiente · Supr eliminar canción activa';
-  playlistCard.append(listHeading, folderTools, spotifyTools, form, search, filterRow, playlist, shortcuts);
+  const playlistSection = createElement('section', 'content-section playlist-section');
+  playlistSection.append(listHeading, search, filterRow, playlist, shortcuts);
+  playlistCard.append(librarySection, spotifyTools, manualSection, playlistSection);
 
   const visualizerCard = createElement('section', 'card visualizer');
   const visualizerHeading = createElement('h2', 'section-title');
@@ -205,7 +211,8 @@ export function mountPlayer(
   let renderedCoverKey = 'empty';
 
   themeButton.addEventListener('click', () => {
-    const nextTheme = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    const currentTheme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+    const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
     document.documentElement.dataset.theme = nextTheme;
     themeButton.replaceChildren(createIcon(nextTheme === 'light' ? 'moon' : 'sun'));
     try { localStorage.setItem('taller-player-theme', nextTheme); } catch { /* El tema queda activo durante esta sesión. */ }
@@ -228,24 +235,19 @@ export function mountPlayer(
   folderPicker.addEventListener('change', () => { void loadSelectedFolder(); });
   spotifyConnectionForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    try {
-      spotifyClient.configure(spotifyClientIdField.input.value);
-      void spotifyClient.authorize().catch((error: unknown) => {
-        showToast(error instanceof Error ? error.message : 'No se pudo abrir Spotify.');
-      });
-    } catch (error) {
-      spotifyStatus.textContent = error instanceof Error ? error.message : 'Revisa el Client ID de Spotify.';
-      spotifyClientIdField.input.focus();
-    }
+    void spotifyClient.authorize().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'No se pudo abrir Spotify.';
+      spotifyStatus.textContent = message;
+      showToast(message);
+    });
   });
   spotifyDisconnectButton.addEventListener('click', () => spotifyClient.disconnect());
   spotifySearchForm.addEventListener('submit', (event) => { void searchSpotify(event); });
   spotifyClient.subscribe((state) => {
     spotifyState = state;
-    spotifyClientIdField.input.value = state.clientId;
     spotifyStatus.textContent = state.message;
-    spotifyClientIdField.wrapper.hidden = state.authenticated;
     spotifyConnectButton.hidden = state.authenticated;
+    spotifyConnectButton.disabled = !state.configured || state.authenticated;
     spotifyDisconnectButton.hidden = !state.authenticated;
     spotifySearch.disabled = !state.authenticated;
     spotifySearchButton.disabled = !state.authenticated;

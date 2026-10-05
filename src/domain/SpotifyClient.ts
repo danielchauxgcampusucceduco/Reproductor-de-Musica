@@ -1,6 +1,5 @@
 import type { Song } from './Song';
 
-const clientIdKey = 'taller-player-spotify-client-id';
 const accessTokenKey = 'taller-player-spotify-access-token';
 const refreshTokenKey = 'taller-player-spotify-refresh-token';
 const expiryKey = 'taller-player-spotify-expires-at';
@@ -9,7 +8,7 @@ const stateKey = 'taller-player-spotify-oauth-state';
 const spotifyTrackPattern = /^spotify:track:[A-Za-z0-9]+$/;
 
 export interface SpotifyClientState {
-  clientId: string;
+  configured: boolean;
   authenticated: boolean;
   message: string;
 }
@@ -20,6 +19,7 @@ interface SpotifyTokenResponse {
   access_token?: unknown;
   expires_in?: unknown;
   refresh_token?: unknown;
+  error?: unknown;
   error_description?: unknown;
 }
 
@@ -30,15 +30,13 @@ export class SpotifyClient {
   private refreshToken = '';
   private expiresAt = 0;
   private authenticated = false;
-  private message = 'Configura tu Client ID de Spotify para conectar tu cuenta Premium.';
+  private message = 'Inicia sesión con Spotify para buscar y reproducir música.';
   private readonly listeners = new Set<(state: SpotifyClientState) => void>();
 
   public constructor(defaultClientId = '') {
-    const storedClientId = readStorage(localStorage, clientIdKey) ?? '';
-    this.clientIdValue = isValidClientId(defaultClientId) ? defaultClientId : storedClientId;
+    this.clientIdValue = isValidClientId(defaultClientId) ? defaultClientId.trim() : '';
   }
 
-  public get clientId(): string { return this.clientIdValue; }
   public get isAuthenticated(): boolean { return this.authenticated; }
 
   public subscribe(listener: (state: SpotifyClientState) => void): () => void {
@@ -47,25 +45,15 @@ export class SpotifyClient {
     return () => this.listeners.delete(listener);
   }
 
-  /** Guarda el Client ID público que Spotify asigna a la aplicación. */
-  public configure(clientId: string): void {
-    const normalized = clientId.trim();
-    if (!isValidClientId(normalized)) {
-      throw new Error('El Client ID de Spotify no tiene un formato válido.');
-    }
-    this.clientIdValue = normalized;
-    try { localStorage.setItem(clientIdKey, normalized); } catch { /* Se puede conectar durante esta sesión. */ }
-    this.setMessage('Client ID guardado. Conecta Spotify para autorizar la reproducción.');
-  }
-
   /** Completa el retorno OAuth o recupera la sesión de esta pestaña. */
   public async initialize(): Promise<void> {
     const url = new URL(window.location.href);
     const error = url.searchParams.get('error');
     const code = url.searchParams.get('code');
     if (error) {
+      const description = url.searchParams.get('error_description');
       this.clearOAuthParameters(url);
-      this.setMessage('No se autorizó Spotify. Puedes volver a intentarlo.');
+      this.setMessage(formatSpotifyAuthorizationError(error, description, getRedirectUri()));
       return;
     }
 
@@ -106,13 +94,13 @@ export class SpotifyClient {
     }
     this.authenticated = false;
     this.setMessage(this.clientIdValue
-      ? 'Client ID listo. Conecta Spotify para buscar música.'
-      : 'Configura tu Client ID de Spotify para conectar tu cuenta Premium.');
+      ? 'Tu cuenta de Spotify aún no está conectada. Inicia sesión para continuar.'
+      : 'Spotify no está configurado para este sitio. Avísale a quien administra la aplicación.');
   }
 
   /** Redirige a Spotify usando PKCE; el navegador nunca recibe un Client Secret. */
   public async authorize(): Promise<void> {
-    if (!this.clientIdValue) throw new Error('Escribe primero tu Client ID de Spotify.');
+    if (!this.clientIdValue) throw new Error('Spotify no está configurado para este sitio. Avísale a quien administra la aplicación.');
     const verifier = randomBase64Url(64);
     const state = randomBase64Url(24);
     const challenge = await createCodeChallenge(verifier);
@@ -122,7 +110,7 @@ export class SpotifyClient {
       client_id: this.clientIdValue,
       response_type: 'code',
       redirect_uri: getRedirectUri(),
-      scope: 'streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state',
+      scope: 'streaming user-read-playback-state user-modify-playback-state',
       code_challenge_method: 'S256',
       code_challenge: challenge,
       state
@@ -145,7 +133,7 @@ export class SpotifyClient {
         refresh_token: this.refreshToken
       })
     });
-    const payload = await readTokenResponse(response);
+    const payload = await readTokenResponse(response, 'refresh');
     this.storeTokens(payload);
     return this.accessToken;
   }
@@ -226,7 +214,7 @@ export class SpotifyClient {
         code_verifier: verifier
       })
     });
-    const payload = await readTokenResponse(response);
+    const payload = await readTokenResponse(response, 'authorization');
     this.storeTokens(payload);
     sessionStorage.removeItem(stateKey);
     sessionStorage.removeItem(verifierKey);
@@ -248,7 +236,10 @@ export class SpotifyClient {
       const retryAfter = response.headers.get('Retry-After');
       throw new Error(retryAfter ? `Spotify limitó las búsquedas. Prueba de nuevo en ${retryAfter} segundos.` : 'Spotify limitó las búsquedas. Inténtalo más tarde.');
     }
-    if (!response.ok) throw new Error(`Spotify rechazó la solicitud (HTTP ${response.status}).`);
+    if (!response.ok) {
+      const payload = await readResponseBody(response);
+      throw new Error(formatSpotifyErrorMessage(response.status, payload, getRedirectUri(), 'api'));
+    }
     if (response.status === 204) return undefined;
     return response.json() as Promise<unknown>;
   }
@@ -282,18 +273,74 @@ export class SpotifyClient {
   }
 
   private snapshot(): SpotifyClientState {
-    return { clientId: this.clientIdValue, authenticated: this.authenticated, message: this.message };
+    return { configured: Boolean(this.clientIdValue), authenticated: this.authenticated, message: this.message };
   }
 }
 
-async function readTokenResponse(response: Response): Promise<SpotifyTokenResponse> {
-  const payload: unknown = await response.json();
+async function readTokenResponse(response: Response, context: 'authorization' | 'refresh'): Promise<SpotifyTokenResponse> {
+  const payload = await readResponseBody(response);
   const token = asRecord(payload) as SpotifyTokenResponse | null;
-  if (!response.ok || !token) {
-    const message = typeof token?.error_description === 'string' ? token.error_description : `Spotify rechazó la autorización (HTTP ${response.status}).`;
-    throw new Error(message);
-  }
+  if (!response.ok) throw new Error(formatSpotifyErrorMessage(response.status, payload, getRedirectUri(), context));
+  if (!token) throw new Error(`Spotify devolvió una respuesta no válida (HTTP ${response.status}). Inténtalo de nuevo.`);
   return token;
+}
+
+async function readResponseBody(response: Response): Promise<unknown> {
+  try { return await response.json() as unknown; } catch { return null; }
+}
+
+export function formatSpotifyErrorMessage(
+  status: number,
+  payload: unknown,
+  redirectUri: string,
+  context: 'authorization' | 'refresh' | 'api'
+): string {
+  const response = asRecord(payload);
+  const code = typeof response?.error === 'string'
+    ? response.error
+    : typeof asRecord(response?.error)?.message === 'string'
+      ? asRecord(response?.error)?.message as string
+      : '';
+  const description = typeof response?.error_description === 'string'
+    ? response.error_description
+    : typeof response?.message === 'string'
+      ? response.message
+      : '';
+
+  if (code === 'invalid_grant' && context === 'authorization') {
+    return `Spotify no aceptó el código de acceso. Inicia sesión otra vez. Si continúa, verifica que la URL de retorno sea exactamente ${redirectUri}`;
+  }
+  if (code === 'invalid_client' || code === 'invalid_client_id') {
+    return 'Spotify no reconoce la aplicación configurada. Revisa el Client ID y el estado de la app en Spotify for Developers.';
+  }
+  if (code === 'invalid_grant' && context === 'refresh') {
+    return 'La sesión de Spotify venció o fue revocada. Pulsa “Iniciar sesión con Spotify” para volver a conectarla.';
+  }
+  if (status === 403 && context === 'api') {
+    return description
+      ? `Spotify denegó esta acción: ${description}`
+      : 'Spotify denegó esta acción. Verifica que tu cuenta Premium esté activa y que hayas autorizado los permisos solicitados.';
+  }
+  if ((code === 'invalid_request' || status === 400) && context === 'authorization') {
+    const details = description || code || `HTTP ${status}`;
+    return `Spotify rechazó la autorización (${details}). La Redirect URI registrada debe coincidir exactamente con ${redirectUri}`;
+  }
+  if (description) return `${description}${code ? ` (${code})` : ''} [HTTP ${status}]`;
+  if (code) return `Spotify respondió ${code} (HTTP ${status}).`;
+  return `Spotify rechazó la solicitud (HTTP ${status})${context === 'authorization' ? `. Verifica que la Redirect URI sea exactamente ${redirectUri}` : ''}.`;
+}
+
+function formatSpotifyAuthorizationError(code: string, description: string | null, redirectUri: string): string {
+  if (code === 'access_denied') return 'No se concedió el acceso a Spotify. Puedes volver a intentarlo cuando quieras.';
+  if (code === 'invalid_client' || code === 'invalid_client_id') {
+    return 'Spotify no reconoce la aplicación. Revisa su Client ID en Spotify for Developers.';
+  }
+  if (code.includes('redirect')) {
+    return `Spotify rechazó la URL de retorno. Registra exactamente esta dirección en Spotify for Developers: ${redirectUri}`;
+  }
+  return description
+    ? `Spotify rechazó el inicio de sesión: ${description} (${code}).`
+    : `Spotify rechazó el inicio de sesión (${code}). Verifica la Redirect URI: ${redirectUri}`;
 }
 
 function getRedirectUri(): string {

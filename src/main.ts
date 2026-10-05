@@ -27,7 +27,7 @@ try {
   const savedTheme = localStorage.getItem('taller-player-theme');
   if (savedTheme === 'light' || savedTheme === 'dark') document.documentElement.dataset.theme = savedTheme;
 } catch {
-  // El reproductor conserva el tema oscuro predeterminado si el almacenamiento no está disponible.
+  // El reproductor conserva su tema claro predeterminado si el almacenamiento no está disponible.
 }
 
 let lastSavedVersion = -1;
