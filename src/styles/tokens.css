@@ -1,0 +1,3 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+:root{--bg:#090a0b;--surface:rgba(21,21,19,.92);--surface-2:#1b1a17;--text:#f4f1e8;--muted:#aaa596;--line:rgba(220,190,125,.15);--accent:#d8b76e;--accent2:#a27e3e;--orange:#f0d99b;--blue:#e5ca83;--green:#c3a25e;--gold-glow:rgba(216,183,110,.18);--shadow:0 24px 72px rgba(0,0,0,.48)}
+[data-theme="light"]{color-scheme:light;--bg:#f6f3eb;--surface:rgba(255,255,252,.94);--surface-2:#eee9dc;--text:#201d17;--muted:#756f61;--line:rgba(91,72,35,.16);--accent:#967332;--accent2:#75591f;--orange:#d7bd7a;--blue:#8c6d2f;--green:#826629;--gold-glow:rgba(151,115,50,.13);--shadow:0 22px 64px rgba(71,57,28,.13)}

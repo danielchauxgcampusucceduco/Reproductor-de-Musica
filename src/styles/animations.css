@@ -1,0 +1,5 @@
+@keyframes art-orbit-spin{to{transform:rotate(360deg)}}
+@keyframes art-disc-spin{to{transform:rotate(360deg)}}
+@keyframes art-glow-pulse{from{transform:scale(.9);opacity:.48}to{transform:scale(1.12);opacity:.9}}
+@keyframes art-wave{from{transform:scaleY(.42)}to{transform:scaleY(1)}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
