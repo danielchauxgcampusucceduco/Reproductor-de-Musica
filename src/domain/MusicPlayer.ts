@@ -395,4 +395,13 @@ function assertValidSong(song: Song): void {
   if (typeof song.favorite !== 'boolean') {
     throw new Error('El estado de favorita de la canción debe ser válido.');
   }
+  if (song.spotifyUri !== undefined && !/^spotify:track:[A-Za-z0-9]+$/.test(song.spotifyUri)) {
+    throw new Error('El URI de Spotify de la canción no es válido.');
+  }
+  if (song.spotifyTrackUrl !== undefined && !/^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]+(?:\?.*)?$/.test(song.spotifyTrackUrl)) {
+    throw new Error('El enlace de Spotify de la canción no es válido.');
+  }
+  if (song.albumImageUrl !== undefined && !/^https:\/\/i\.scdn\.co\/image\/[A-Za-z0-9]+$/.test(song.albumImageUrl)) {
+    throw new Error('La carátula de Spotify de la canción no es válida.');
+  }
 }

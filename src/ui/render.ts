@@ -1,6 +1,8 @@
 import type { MusicPlayer, PlayerState } from '../domain/MusicPlayer';
 import type { Song } from '../domain/Song';
 import type { BrowserAudioEngine } from '../domain/AudioEngine';
+import type { SpotifyClient, SpotifyClientState } from '../domain/SpotifyClient';
+import type { SpotifyPlaybackEngine } from '../domain/SpotifyPlaybackEngine';
 import { createButton, createElement, createIcon, createIconButton, formatTime, type IconName } from './components/dom';
 import { createArtwork } from './components/Artwork';
 import { createSongRow } from './components/SongRow';
@@ -11,7 +13,14 @@ import { addOption, clearErrors, createSongId, makeField, parseDuration, showErr
 const icons = { play: 'play', pause: 'pause', next: 'next', previous: 'previous', shuffle: 'shuffle', repeat: 'repeat' } satisfies Record<string, IconName>;
 
 /** Renderiza la aplicación mediante nodos DOM; el texto de cada canción se asigna de forma segura. */
-export function mountPlayer(root: HTMLElement, player: MusicPlayer, audioEngine: BrowserAudioEngine, onChange: (state: PlayerState) => void): void {
+export function mountPlayer(
+  root: HTMLElement,
+  player: MusicPlayer,
+  audioEngine: BrowserAudioEngine,
+  spotifyClient: SpotifyClient,
+  spotifyPlayback: SpotifyPlaybackEngine,
+  onChange: (state: PlayerState) => void
+): void {
   const app = createElement('main', 'app');
   const header = createElement('header', 'topbar');
   const brand = createElement('div', 'brand');
@@ -98,6 +107,41 @@ export function mountPlayer(root: HTMLElement, player: MusicPlayer, audioEngine:
   folderStatus.setAttribute('aria-live', 'polite');
   folderTools.append(folderButton, folderHint, folderPrivacyHint, folderPicker, folderStatus);
 
+  const spotifyTools = createElement('section', 'spotify-tools');
+  spotifyTools.setAttribute('aria-label', 'Buscar música con Spotify');
+  const spotifyHeading = createElement('h3', 'spotify-heading');
+  spotifyHeading.textContent = 'Spotify Premium';
+  const spotifyDescription = createElement('p', 'spotify-description');
+  spotifyDescription.textContent = 'Busca canciones y agrégalas a tu lista para reproducirlas desde Spotify.';
+  const spotifyConnectionForm = createElement('form', 'spotify-connect-form');
+  spotifyConnectionForm.noValidate = true;
+  const spotifyClientIdField = makeField('Client ID público', 'Client ID de Spotify', 'Pega el Client ID de Spotify', 'spotify-client-id');
+  spotifyClientIdField.input.value = spotifyClient.clientId;
+  spotifyClientIdField.input.autocomplete = 'off';
+  spotifyClientIdField.input.spellcheck = false;
+  const spotifyConnectButton = createButton('Conectar con Spotify', 'Conectar Spotify', 'primary');
+  spotifyConnectButton.type = 'submit';
+  const spotifyDisconnectButton = createButton('Desconectar Spotify', 'Desconectar', 'filter-button');
+  spotifyDisconnectButton.hidden = true;
+  spotifyConnectionForm.append(spotifyClientIdField.wrapper, spotifyConnectButton, spotifyDisconnectButton);
+  const spotifyStatus = createElement('p', 'spotify-status');
+  spotifyStatus.setAttribute('aria-live', 'polite');
+  const spotifyPlaybackStatus = createElement('p', 'spotify-playback-status');
+  spotifyPlaybackStatus.setAttribute('aria-live', 'polite');
+  const spotifySearchForm = createElement('form', 'spotify-search-form');
+  const spotifySearch = createElement('input', 'search-input');
+  spotifySearch.type = 'search';
+  spotifySearch.placeholder = 'Busca en el catálogo de Spotify';
+  spotifySearch.setAttribute('aria-label', 'Buscar canciones en Spotify');
+  spotifySearch.disabled = true;
+  const spotifySearchButton = createButton('Buscar en Spotify', 'Buscar', 'filter-button');
+  spotifySearchButton.type = 'submit';
+  spotifySearchButton.disabled = true;
+  spotifySearchForm.append(spotifySearch, spotifySearchButton);
+  const spotifyResults = createElement('div', 'spotify-results');
+  spotifyResults.setAttribute('aria-live', 'polite');
+  spotifyTools.append(spotifyHeading, spotifyDescription, spotifyConnectionForm, spotifyStatus, spotifyPlaybackStatus, spotifySearchForm, spotifyResults);
+
   const form = createElement('form', 'add-form');
   form.noValidate = true;
   const titleField = makeField('Título', 'Título de la canción', 'Ej. Luces de ciudad', 'song-title');
@@ -138,7 +182,7 @@ export function mountPlayer(root: HTMLElement, player: MusicPlayer, audioEngine:
   playlist.setAttribute('aria-live', 'polite');
   const shortcuts = createElement('p', 'shortcuts');
   shortcuts.textContent = 'Atajos: Espacio reproducir/pausar · ← anterior · → siguiente · Supr eliminar canción activa';
-  playlistCard.append(listHeading, folderTools, form, search, filterRow, playlist, shortcuts);
+  playlistCard.append(listHeading, folderTools, spotifyTools, form, search, filterRow, playlist, shortcuts);
 
   const visualizerCard = createElement('section', 'card visualizer');
   const visualizerHeading = createElement('h2', 'section-title');
@@ -153,6 +197,7 @@ export function mountPlayer(root: HTMLElement, player: MusicPlayer, audioEngine:
   root.replaceChildren(app);
 
   let latestState: PlayerState | null = null;
+  let spotifyState: SpotifyClientState | null = null;
   let favoritesFilter = false;
   let draggedId: string | null = null;
   let renderedPlaylistKey = '';
@@ -181,6 +226,36 @@ export function mountPlayer(root: HTMLElement, player: MusicPlayer, audioEngine:
   });
   folderButton.addEventListener('click', () => folderPicker.click());
   folderPicker.addEventListener('change', () => { void loadSelectedFolder(); });
+  spotifyConnectionForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    try {
+      spotifyClient.configure(spotifyClientIdField.input.value);
+      void spotifyClient.authorize().catch((error: unknown) => {
+        showToast(error instanceof Error ? error.message : 'No se pudo abrir Spotify.');
+      });
+    } catch (error) {
+      spotifyStatus.textContent = error instanceof Error ? error.message : 'Revisa el Client ID de Spotify.';
+      spotifyClientIdField.input.focus();
+    }
+  });
+  spotifyDisconnectButton.addEventListener('click', () => spotifyClient.disconnect());
+  spotifySearchForm.addEventListener('submit', (event) => { void searchSpotify(event); });
+  spotifyClient.subscribe((state) => {
+    spotifyState = state;
+    spotifyClientIdField.input.value = state.clientId;
+    spotifyStatus.textContent = state.message;
+    spotifyClientIdField.wrapper.hidden = state.authenticated;
+    spotifyConnectButton.hidden = state.authenticated;
+    spotifyDisconnectButton.hidden = !state.authenticated;
+    spotifySearch.disabled = !state.authenticated;
+    spotifySearchButton.disabled = !state.authenticated;
+    if (state.authenticated) {
+      void spotifyPlayback.connect().catch((error: unknown) => {
+        spotifyPlaybackStatus.textContent = error instanceof Error ? error.message : 'No se pudo conectar Spotify.';
+      });
+    }
+  });
+  spotifyPlayback.subscribe((state) => { spotifyPlaybackStatus.textContent = state.message; });
   position.addEventListener('change', () => {
     customPositionField.wrapper.hidden = position.value !== 'custom';
     updatePreview();
@@ -436,6 +511,60 @@ export function mountPlayer(root: HTMLElement, player: MusicPlayer, audioEngine:
       folderButton.disabled = false;
       folderButton.replaceChildren(createIcon('folder'), document.createTextNode('Cargar carpeta de música'));
       folderPicker.value = '';
+    }
+  }
+
+  async function searchSpotify(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const query = spotifySearch.value.trim();
+    if (!query || !spotifyState?.authenticated) return;
+    spotifySearchButton.disabled = true;
+    spotifyResults.replaceChildren();
+    spotifyPlaybackStatus.textContent = 'Buscando en Spotify…';
+    try {
+      const tracks = await spotifyClient.searchTracks(query);
+      if (tracks.length === 0) {
+        spotifyPlaybackStatus.textContent = 'No se encontraron canciones para esa búsqueda.';
+        return;
+      }
+      spotifyPlaybackStatus.textContent = `${tracks.length} canciones encontradas.`;
+      for (const track of tracks) {
+        const result = createElement('div', 'spotify-result');
+        if (track.albumImageUrl) {
+          const artwork = createElement('img', 'spotify-result-artwork');
+          artwork.src = track.albumImageUrl;
+          artwork.alt = '';
+          artwork.loading = 'lazy';
+          result.append(artwork);
+        }
+        const info = createElement('div', 'spotify-result-info');
+        const title = createElement('strong');
+        title.textContent = track.title;
+        const artist = createElement('span');
+        artist.textContent = track.artist;
+        info.append(title, artist);
+        const addTrack = createButton(`Agregar ${track.title} a la lista`, 'Agregar', 'spotify-add-button');
+        addTrack.addEventListener('click', () => {
+          if (latestState?.songs.some((song) => song.id === track.id)) {
+            showToast('Esa canción ya está en tu lista.');
+            return;
+          }
+          try {
+            player.add(track, player.getSongCount());
+            showToast(`“${track.title}” se agregó a tu lista.`);
+          } catch (error) {
+            showToast(error instanceof Error ? error.message : 'No se pudo agregar la canción.');
+          }
+        });
+        result.append(info, addTrack);
+        spotifyResults.append(result);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Spotify no pudo completar la búsqueda.';
+      spotifyPlaybackStatus.textContent = message;
+      showToast(message);
+    } finally {
+      spotifySearchButton.disabled = !spotifyState?.authenticated;
     }
   }
 

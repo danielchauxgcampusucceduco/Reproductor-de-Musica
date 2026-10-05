@@ -4,13 +4,23 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 let artworkSequence = 0;
 
 /** Genera una carátula SVG única a partir del nombre y el artista, sin descargar imágenes. */
-export function createArtwork(title: string, artist: string): HTMLDivElement {
+export function createArtwork(title: string, artist: string, imageUrl?: string): HTMLDivElement {
   artworkSequence += 1;
   const seed = hash(`${title}\u0000${artist}`);
   const hue = 37 + (seed % 17);
   const gradientId = `art-gradient-${artworkSequence}`;
   const glowId = `art-glow-${artworkSequence}`;
   const art = createElement('div', 'artwork');
+  if (imageUrl && /^https:\/\/i\.scdn\.co\/image\/[A-Za-z0-9]+$/.test(imageUrl)) {
+    const image = createElement('img', 'artwork-image');
+    image.src = imageUrl;
+    image.alt = '';
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    image.draggable = false;
+    art.append(image);
+    return art;
+  }
   const svg = createSvg('svg', { viewBox: '0 0 400 400', preserveAspectRatio: 'xMidYMid slice' });
   const definitions = createSvg('defs');
   const backgroundGradient = createSvg('linearGradient', { id: gradientId, x1: '0', y1: '1', x2: '1', y2: '0' });

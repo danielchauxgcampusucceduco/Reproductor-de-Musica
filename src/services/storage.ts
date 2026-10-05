@@ -42,7 +42,22 @@ function isSong(value: unknown): value is Song {
     && typeof candidate.durationSec === 'number'
     && Number.isSafeInteger(candidate.durationSec)
     && candidate.durationSec > 0
-    && typeof candidate.favorite === 'boolean';
+    && typeof candidate.favorite === 'boolean'
+    && (candidate.spotifyUri === undefined || isSpotifyTrackUri(candidate.spotifyUri))
+    && (candidate.spotifyTrackUrl === undefined || isSpotifyTrackUrl(candidate.spotifyTrackUrl))
+    && (candidate.albumImageUrl === undefined || isSpotifyAlbumImageUrl(candidate.albumImageUrl));
+}
+
+function isSpotifyTrackUri(value: unknown): value is string {
+  return typeof value === 'string' && /^spotify:track:[A-Za-z0-9]+$/.test(value);
+}
+
+function isSpotifyTrackUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^https:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]+(?:\?.*)?$/.test(value);
+}
+
+function isSpotifyAlbumImageUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^https:\/\/i\.scdn\.co\/image\/[A-Za-z0-9]+$/.test(value);
 }
 
 function normalizeSongs(values: readonly unknown[]): Song[] {
