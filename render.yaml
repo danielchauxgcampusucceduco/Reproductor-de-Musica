@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: reproductor-de-musica-daniel
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    autoDeployTrigger: checksPass
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
